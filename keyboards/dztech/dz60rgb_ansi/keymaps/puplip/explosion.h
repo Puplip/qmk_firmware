@@ -11,7 +11,7 @@ RGB_MATRIX_EFFECT(explosion)
 
 #define EXPLOSION_RADIUS_GRADIENT 20
 #define EXPLOSION_RADIUS_GRADIENT_MIN_EXP 3
-#define EXPLOSION_RADIUS_GRADIENT_MIN (1 << EXPLOSION_RADIUS_GRADIENT_MIN_EXP)
+#define EXPLOSION_RADIUS_GRADIENT_MIN (1 << (EXPLOSION_RADIUS_GRADIENT_MIN_EXP + 1))
 
 #define EXPLOSION_RADIUS 69
 
@@ -19,13 +19,13 @@ RGB_MATRIX_EFFECT(explosion)
 #define EXPLOSION_TIME_MIN_EXP 2
 #define EXPLOSION_TIME_MIN (1 << EXPLOSION_TIME_MIN_EXP)
 
-#define EXPLOSION_FADE_DISTANCE 200
+#define EXPLOSION_FADE_DISTANCE 215
 #define EXPLOSION_FADE_DISTANCE_MIN_EXP 6
-#define EXPLOSION_FADE_DISTANCE_MIN (1 << EXPLOSION_FADE_DISTANCE_MIN_EXP)
+#define EXPLOSION_FADE_DISTANCE_MIN (1 << (EXPLOSION_FADE_DISTANCE_MIN_EXP + 1))
 
 #define EXPLOSION_FADE_TIME (EXPLOSION_TIME * 69)
 #define EXPLOSION_FADE_TIME_MIN_EXP 7
-#define EXPLOSION_FADE_TIME_MIN (1 << EXPLOSION_FADE_DISTANCE_MIN_EXP)
+#define EXPLOSION_FADE_TIME_MIN (1 << (EXPLOSION_FADE_DISTANCE_MIN_EXP + 1))
 
 #define EXPLOSION_TOTAL_TIME (EXPLOSION_TIME + EXPLOSION_FADE_TIME)
 
@@ -91,6 +91,8 @@ static bool explosion(effect_params_t* params){
             radius_and_gradient = EXPLOSION_RADIUS + EXPLOSION_RADIUS_GRADIENT;
 
             fade_ratio = scale16by8((tick - EXPLOSION_TIME) << (8 - EXPLOSION_FADE_TIME_MIN_EXP), (1 << (8 + EXPLOSION_FADE_TIME_MIN_EXP)) / EXPLOSION_FADE_TIME);
+        } else {
+            continue;
         }
 
         for (uint8_t i = led_min; i < led_max; i++) {
@@ -101,7 +103,7 @@ static bool explosion(effect_params_t* params){
             uint16_t dx   = (uint16_t)abs((int16_t)g_led_config.point[i].x - (int16_t)g_last_hit_tracker.x[j]);
             uint16_t dy   = (uint16_t)abs((int16_t)g_led_config.point[i].y - (int16_t)g_last_hit_tracker.y[j]);
             uint8_t  dist = sqrt16(dx * dx + dy * dy);
-            if(dist < radius_and_gradient && tick < EXPLOSION_TOTAL_TIME){
+            if(dist < radius_and_gradient){
 
                 uint16_t fade = scale16by8((uint16_t)dist << (8 - EXPLOSION_FADE_DISTANCE_MIN_EXP), (1 << (8 + EXPLOSION_FADE_DISTANCE_MIN_EXP)) / EXPLOSION_FADE_DISTANCE);
                 if (tick >= EXPLOSION_TIME){
