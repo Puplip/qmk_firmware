@@ -9,21 +9,21 @@ RGB_MATRIX_EFFECT(explosion)
 
 
 
-#define EXPLOSION_RADIUS_GRADIENT 16
-#define EXPLOSION_RADIUS_GRADIENT_MIN_EXP 2
+#define EXPLOSION_RADIUS_GRADIENT 20
+#define EXPLOSION_RADIUS_GRADIENT_MIN_EXP 3
 #define EXPLOSION_RADIUS_GRADIENT_MIN (1 << EXPLOSION_RADIUS_GRADIENT_MIN_EXP)
 
-#define EXPLOSION_RADIUS 42
+#define EXPLOSION_RADIUS 69
 
 #define EXPLOSION_TIME 10
 #define EXPLOSION_TIME_MIN_EXP 2
 #define EXPLOSION_TIME_MIN (1 << EXPLOSION_TIME_MIN_EXP)
 
-#define EXPLOSION_FADE_DISTANCE 150
+#define EXPLOSION_FADE_DISTANCE 200
 #define EXPLOSION_FADE_DISTANCE_MIN_EXP 6
 #define EXPLOSION_FADE_DISTANCE_MIN (1 << EXPLOSION_FADE_DISTANCE_MIN_EXP)
 
-#define EXPLOSION_FADE_TIME (EXPLOSION_TIME * 50)
+#define EXPLOSION_FADE_TIME (EXPLOSION_TIME * 69)
 #define EXPLOSION_FADE_TIME_MIN_EXP 7
 #define EXPLOSION_FADE_TIME_MIN (1 << EXPLOSION_FADE_DISTANCE_MIN_EXP)
 
@@ -59,14 +59,6 @@ static bool explosion(effect_params_t* params){
 
     uint8_t hit_count = g_last_hit_tracker.count;
     uint8_t led_count = sub8(led_max,led_min);
-
-    // uint8_t dist_fade_scale = qadd8(rgb_matrix_config.hsv.h, 1);
-    // uint8_t tick_fade_scale = qadd8(rgb_matrix_config.hsv.s, 1);
-    // uint8_t tick_radius_scale = qadd8(rgb_matrix_config.hsv.v, 1);
-
-    // uint8_t dist_fade_scale = 255;
-    // uint8_t tick_fade_scale = 64;
-    // uint8_t tick_radius_scale = 255;
 
     HSV hsv_buffer[RGB_MATRIX_LED_PROCESS_LIMIT];
     uint8_t last_dist[RGB_MATRIX_LED_PROCESS_LIMIT];
