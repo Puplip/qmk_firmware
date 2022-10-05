@@ -9,6 +9,7 @@
         "**/*.bin": true
     },
     "files.associations": {
+        "*.rs": "rust",
         "*.h": "c",
         "*.c": "c",
         "*.inc": "c",
@@ -17,7 +18,12 @@
         "xstddef": "c",
         "type_traits": "c",
         "utility": "c",
-        "ranges": "c"
+        "ranges": "c",
+        "cstdlib": "c",
+        "algorithm": "c",
+        "chrono": "c",
+        "limits": "c",
+        "random": "c"
     },
     "[markdown]": {
         "editor.trimAutoWhitespace": false,
