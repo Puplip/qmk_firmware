@@ -1,14 +1,26 @@
+
 RGB_MATRIX_EFFECT(explosion)
-RGB_MATRIX_EFFECT(cast_explosion)
 
 #ifdef RGB_MATRIX_CUSTOM_EFFECT_IMPLS
 #ifdef RGB_MATRIX_KEYREACTIVE_ENABLED
 
-#define EX_CAST_TICKS 256
-#define EX_HOLD_TICKS 2048
-#define EX_BOOM_TICKS 512
-#define EX_FADE_TICKS 1024
+#define EX_CAST_KEY 28
+
+#define EX_CAST_EXP 8
+#define EX_CAST_TICKS (1<<EX_CAST_EXP)
+#define EX_HOLD_EXP 11
+#define EX_HOLD_TICKS (1<<EX_HOLD_EXP)
+#define EX_BOOM_EXP 9
+#define EX_BOOM_TICKS (1<<EX_BOOM_EXP)
+#define EX_FADE_EXP 10
+#define EX_FADE_TICKS (1<<EX_FADE_EXP)
 #define EX_TOTAL_TICKS (EX_CAST_TICKS + EX_HOLD_TICKS + EX_BOOM_TICKS + EX_FADE_TICKS)
+
+#define EX_FAST_BOOM_EXP 8
+#define EX_FAST_BOOM_TICKS (1<<EX_FAST_BOOM_EXP)
+#define EX_FAST_FADE_EXP 9
+#define EX_FAST_FADE_TICKS (1<<EX_FAST_FADE_EXP)
+
 
 #define EX_SPELL_RADIUS 86
 #define EX_SPELL_RADIUS_EXP 8
@@ -48,7 +60,7 @@ static uint8_t gnoise(uint8_t x,uint8_t y,uint8_t z){
 
 }
 
-static bool cast_explosion(effect_params_t* params){
+static bool explosion(effect_params_t* params){
     RGB_MATRIX_USE_LIMITS(led_min, led_max);
 
     uint8_t hit_count = g_last_hit_tracker.count;
@@ -69,13 +81,31 @@ static bool cast_explosion(effect_params_t* params){
 
         uint16_t tick = g_last_hit_tracker.tick[hit_index];
 
+        
+
         uint16_t radius;
         bool exploding = false;
         bool casting = false;
         uint8_t fade_ratio = 0;
         uint8_t overdrive_ratio = 0;
+        bool exploding_fast = false;
 
-        if(tick < (EX_CAST_TICKS + EX_HOLD_TICKS)){
+        if(g_last_hit_tracker.index[hit_index] != EX_CAST_KEY){
+            if(tick < (EX_FAST_BOOM_TICKS + EX_FAST_FADE_TICKS)){
+                exploding_fast = true;
+
+                if(tick < (EX_FAST_BOOM_TICKS)){
+                    radius = tick>>1;
+                    overdrive_ratio = sub8(255,(uint8_t)(tick));
+
+                } else {
+                    radius = EX_FAST_BOOM_TICKS>>1;
+                    fade_ratio = (uint8_t)((tick - EX_FAST_BOOM_TICKS) >> (EX_FAST_FADE_EXP - 8));
+                }
+            }
+            
+        }
+        else if(tick < (EX_CAST_TICKS + EX_HOLD_TICKS)){
             casting = true;
             if (tick < EX_CAST_TICKS ){
                 uint8_t cast_ratio = (uint8_t)tick;
@@ -87,11 +117,11 @@ static bool cast_explosion(effect_params_t* params){
             exploding = true;
             if(tick < (EX_CAST_TICKS + EX_HOLD_TICKS + EX_BOOM_TICKS)){
                 radius = (tick - (EX_CAST_TICKS + EX_HOLD_TICKS))>>1;
-                overdrive_ratio = sub8(255,(uint8_t)((tick - (EX_CAST_TICKS + EX_HOLD_TICKS))>>1));
+                overdrive_ratio = sub8(255,(uint8_t)((tick - (EX_CAST_TICKS + EX_HOLD_TICKS))>>(EX_BOOM_EXP - 8)));
 
             } else {
                 radius = EX_BOOM_TICKS>>1;
-                fade_ratio = (uint8_t)((tick - (EX_CAST_TICKS + EX_HOLD_TICKS + EX_BOOM_TICKS)) >> 2);
+                fade_ratio = (uint8_t)((tick - (EX_CAST_TICKS + EX_HOLD_TICKS + EX_BOOM_TICKS)) >> (EX_FADE_EXP - 8));
             }
         } else {
             continue;
@@ -116,12 +146,15 @@ static bool cast_explosion(effect_params_t* params){
 
 
             if(dist < radius){
-                
+
+
+                if(casting || exploding){
+                    last_tick[buffer_index] = 0;
+                } else if(exploding_fast){
+                    last_tick[buffer_index] = tick;
+                }
 
                 if(casting){
-
-                    last_tick[buffer_index] = tick;
-
 
                     if (dist < 16){
                         hsv_buffer[buffer_index].h = 0;
@@ -151,10 +184,8 @@ static bool cast_explosion(effect_params_t* params){
                             hsv_buffer[buffer_index].v = blend8(255,hsv_buffer[buffer_index].v,border_ratio);
                         }
                     }
-                } else if (exploding){
 
-
-                    last_tick[buffer_index] = tick;
+                } else if (exploding || exploding_fast){
 
                     uint8_t theta = atan2_8(dy,dx);
 
@@ -165,86 +196,6 @@ static bool cast_explosion(effect_params_t* params){
                     hsv_buffer[buffer_index].s = 255;
                     hsv_buffer[buffer_index].v = qadd8(scale8(gnoise(theta,sub8((dist),add8(tick8,42)),slow_tick8),fade_ratio & 0x80 ? sub8(255,qadd8(dist,fade_ratio<<1)) : sub8(255,scale8_video(dist,fade_ratio<<1))),qsub8(overdrive_ratio,dist));
                 }
-            }
-        }
-    }
-
-    for (uint8_t i = 0; i < led_count; i++) {
-        RGB rgb = rgb_matrix_hsv_to_rgb(hsv_buffer[i]);
-        rgb_matrix_set_color(add8(led_min,i), rgb.r, rgb.g, rgb.b);
-    }
-    return rgb_matrix_check_finished_leds(led_max);
-}
-
-static bool explosion(effect_params_t* params){
-    RGB_MATRIX_USE_LIMITS(led_min, led_max);
-
-    uint8_t hit_count = g_last_hit_tracker.count;
-    uint8_t led_count = sub8(led_max,led_min);
-
-    HSV hsv_buffer[RGB_MATRIX_LED_PROCESS_LIMIT];
-    uint16_t last_tick[RGB_MATRIX_LED_PROCESS_LIMIT];
-
-    for (uint8_t i = 0; i < led_count; i++) {
-        hsv_buffer[i].h = 0;
-        hsv_buffer[i].s = 0;
-        hsv_buffer[i].v = 0;
-        last_tick[i] = 0xffff;
-    }
-
-
-    for (uint8_t hit_index = 0; hit_index < hit_count; hit_index++) {
-
-        
-        uint16_t tick = g_last_hit_tracker.tick[hit_index];
-
-        uint16_t radius;
-        uint8_t fade_ratio = 0;
-        uint8_t overdrive_ratio = 0;
-
-        if (tick < (EX_FADE_TICKS + EX_BOOM_TICKS)){
-            if(tick < EX_BOOM_TICKS){
-                radius = tick>>1;
-                overdrive_ratio = sub8(255,(uint8_t)(tick>>1));
-
-            } else {
-                radius = EX_BOOM_TICKS>>1;
-                fade_ratio = (uint8_t)((tick - EX_BOOM_TICKS) >> 2);
-            }
-        } else {
-            continue;
-        }
-
-
-        for (uint8_t i = led_min; i < led_max; i++) {
-
-            uint8_t buffer_index = sub8(i,led_min);
-            if(last_tick[buffer_index] <= tick){
-                continue;
-            }
-
-            // RGB_MATRIX_TEST_LED_FLAGS();
-            int16_t dx    = (int16_t)g_led_config.point[i].x - (int16_t)g_last_hit_tracker.x[hit_index];
-            int16_t dy    = (int16_t)g_led_config.point[i].y - (int16_t)g_last_hit_tracker.y[hit_index];
-            uint16_t udx = (uint16_t)abs(dx);
-            uint16_t udy = (uint16_t)abs(dy);
-            uint8_t  dist  = sqrt16(udx * udx + udy * udy);
-            dist = dist ? dist : 1;
-
-
-            if(dist < radius){
-                
-                last_tick[buffer_index] = tick;
-
-                uint8_t theta = atan2_8(dy,dx);
-
-                uint8_t tick8 = (uint8_t)(tick % 256);
-                uint8_t slow_tick8 = (uint8_t)((tick >> 2) % 256);
-
-                hsv_buffer[buffer_index].h = scale8(42, gnoise(theta,sub8(dist,tick8),slow_tick8));
-                hsv_buffer[buffer_index].s = 255;
-                hsv_buffer[buffer_index].v = qadd8(scale8(gnoise(theta,sub8((dist),add8(tick8,42)),slow_tick8),fade_ratio & 0x80 ? sub8(255,qadd8(dist,fade_ratio<<1)) : sub8(255,scale8_video(dist,fade_ratio<<1))),qsub8(overdrive_ratio,dist));
-
             }
         }
     }
