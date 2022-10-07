@@ -5,6 +5,8 @@ RGB_MATRIX_EFFECT(explosion)
 #ifdef RGB_MATRIX_KEYREACTIVE_ENABLED
 
 #define EX_CAST_KEY 28
+#define EX_CAST_X 108
+#define EX_CAST_Y 32
 
 #define EX_CAST_EXP 8
 #define EX_CAST_TICKS (1<<EX_CAST_EXP)
@@ -67,13 +69,15 @@ static bool explosion(effect_params_t* params){
     uint8_t led_count = sub8(led_max,led_min);
 
     HSV hsv_buffer[RGB_MATRIX_LED_PROCESS_LIMIT];
-    uint16_t last_tick[RGB_MATRIX_LED_PROCESS_LIMIT];
+    bool last_explosion[RGB_MATRIX_LED_PROCESS_LIMIT];
+    uint16_t last_spell[RGB_MATRIX_LED_PROCESS_LIMIT];
 
     for (uint8_t i = 0; i < led_count; i++) {
         hsv_buffer[i].h = 0;
-        hsv_buffer[i].s = 0;
+        hsv_buffer[i].s = 0xFF;
         hsv_buffer[i].v = 0;
-        last_tick[i] = 0xffff;
+        last_explosion[i] = false;
+        last_spell[i] = 0xFFFF;
     }
 
 
@@ -130,35 +134,40 @@ static bool explosion(effect_params_t* params){
         for (uint8_t i = led_min; i < led_max; i++) {
 
             uint8_t buffer_index = sub8(i,led_min);
-            if(last_tick[buffer_index] <= tick){
+            if(last_spell[buffer_index] <= tick){
+                continue;
+            } else if(last_spell[buffer_index] != 0xFFFF && !casting){
                 continue;
             }
 
 
 
             // RGB_MATRIX_TEST_LED_FLAGS();
-            int16_t dx    = (int16_t)g_led_config.point[i].x - (int16_t)g_last_hit_tracker.x[hit_index];
-            int16_t dy    = (int16_t)g_led_config.point[i].y - (int16_t)g_last_hit_tracker.y[hit_index];
+            int16_t dx;
+            int16_t dy;
+            if(casting || exploding){
+                dx = (int16_t)g_led_config.point[i].x - EX_CAST_X;
+                dy = (int16_t)g_led_config.point[i].y - EX_CAST_Y;
+            } else {
+                dx = (int16_t)g_led_config.point[i].x - (int16_t)g_last_hit_tracker.x[hit_index];
+                dy = (int16_t)g_led_config.point[i].y - (int16_t)g_last_hit_tracker.y[hit_index];
+
+            }
+
             uint16_t udx = (uint16_t)abs(dx);
             uint16_t udy = (uint16_t)abs(dy);
             uint8_t  dist  = sqrt16(udx * udx + udy * udy);
             dist = dist ? dist : 1;
 
-
             if(dist < radius){
 
 
-                if(casting || exploding){
-                    last_tick[buffer_index] = 0;
-                } else if(exploding_fast){
-                    last_tick[buffer_index] = tick;
-                }
-
                 if(casting){
+                    last_spell[buffer_index] = tick;
 
                     if (dist < 16){
                         hsv_buffer[buffer_index].h = 0;
-                        hsv_buffer[buffer_index].s = 255;
+                        hsv_buffer[buffer_index].s = 0;
                         hsv_buffer[buffer_index].v = 255;
                     } else {
 
@@ -179,6 +188,7 @@ static bool explosion(effect_params_t* params){
                         uint16_t border_radius = radius - 16;
                         if(dist >= border_radius){
                             uint8_t border_ratio = (uint8_t)(dist - border_radius)<<4;
+                            border_ratio &= border_ratio >> 4;
                             hsv_buffer[buffer_index].h = blend8(42,  hsv_buffer[buffer_index].h,border_ratio);
                             hsv_buffer[buffer_index].s = blend8(255,hsv_buffer[buffer_index].s,border_ratio);
                             hsv_buffer[buffer_index].v = blend8(255,hsv_buffer[buffer_index].v,border_ratio);
@@ -187,14 +197,29 @@ static bool explosion(effect_params_t* params){
 
                 } else if (exploding || exploding_fast){
 
-                    uint8_t theta = atan2_8(dy,dx);
+                    uint8_t theta = atan2_8(dy,dx) + g_last_hit_tracker.index[hit_index];
 
                     uint8_t tick8 = (uint8_t)(tick % 256);
-                    uint8_t slow_tick8 = (uint8_t)((tick >> 2) % 256);
+                    uint8_t slow_tick8 = (uint8_t)(((tick >> 2) + (uint16_t)g_last_hit_tracker.index[hit_index]) % 256);
 
-                    hsv_buffer[buffer_index].h = scale8(42, gnoise(theta,sub8(dist,tick8),slow_tick8));
-                    hsv_buffer[buffer_index].s = 255;
-                    hsv_buffer[buffer_index].v = qadd8(scale8(gnoise(theta,sub8((dist),add8(tick8,42)),slow_tick8),fade_ratio & 0x80 ? sub8(255,qadd8(dist,fade_ratio<<1)) : sub8(255,scale8_video(dist,fade_ratio<<1))),qsub8(overdrive_ratio,dist));
+                    uint8_t overdrive = qsub8(overdrive_ratio,dist);
+
+                    uint8_t h = scale8(42, qadd8(gnoise(theta,sub8(dist,tick8),slow_tick8),overdrive<<1));
+                    uint8_t s = qsub8(255,overdrive > 127 ? overdrive<<1 : 0);
+                    uint8_t v = qadd8(scale8(gnoise(theta,sub8(dist,add8(tick8,42)),slow_tick8),fade_ratio & 0x80 ? sub8(255,qadd8(dist,fade_ratio<<1)) : sub8(255,scale8_video(dist,fade_ratio<<1))),overdrive);
+
+                    if(last_explosion[buffer_index]){
+                        hsv_buffer[buffer_index].h = qadd8(hsv_buffer[buffer_index].h,h);
+                        if(hsv_buffer[buffer_index].h > 42){hsv_buffer[buffer_index].h = 42;}
+                        hsv_buffer[buffer_index].s = qsub8(hsv_buffer[buffer_index].s,sub8(0xFF,s));
+                        hsv_buffer[buffer_index].v = qadd8(hsv_buffer[buffer_index].v,v);
+                    } else {
+                        hsv_buffer[buffer_index].h = h;
+                        hsv_buffer[buffer_index].s = s;
+                        hsv_buffer[buffer_index].v = v;
+                        last_explosion[buffer_index] = true;
+                    }
+                    
                 }
             }
         }
